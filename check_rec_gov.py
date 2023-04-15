@@ -4,6 +4,7 @@
 import json
 import logging
 import sys
+import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 from itertools import count, groupby
@@ -70,9 +71,7 @@ def get_park_information(
             LOG.debug("campsite_data="+json.dumps(campsite_data))
             available = []
             a = data.setdefault(campsite_id, [])
-            for date, availability_value in campsite_data[
-                "availabilities"
-            ].items():
+            for date, availability_value in campsite_data["availabilities"].items():
                 if availability_value != "Available":
                     continue
 
@@ -183,9 +182,7 @@ def consecutive_nights(available, nights):
     return long_enough_consecutive_ranges
 
 
-def check_park(
-    park_id, start_date, end_date, campsite_type, campsite_ids=(), nights=None
-):
+def check_park(park_id, start_date, end_date, campsite_type, campsite_ids=(), nights=None):
     park_information = get_park_information(
         park_id, start_date, end_date, campsite_type, campsite_ids
     )
@@ -201,99 +198,169 @@ def check_park(
     return current, maximum, availabilities_filtered, park_name
 
 
-def generate_human_output(
-    info_by_park_id, start_date, end_date, gen_campsite_info=False
-):
-    out = []
-    has_availabilities = False
+# def generate_human_output(
+#     info_by_park_id, start_date, end_date, gen_campsite_info=False
+# ):
+#     out = []
+#     has_availabilities = False
+#     for park_id, info in info_by_park_id.items():
+#         current, maximum, available_dates_by_site_id, park_name = info
+#         if current:
+#             emoji = Emoji.SUCCESS.value
+#             has_availabilities = True
+#         else:
+#             emoji = Emoji.FAILURE.value
+
+#         out.append(
+#             "{emoji} {park_name} ({park_id}): {current} site(s) available out of {maximum} site(s)".format(
+#                 emoji=emoji,
+#                 park_name=park_name,
+#                 park_id=park_id,
+#                 current=current,
+#                 maximum=maximum,
+#             )
+#         )
+
+#         # Displays campsite ID and availability dates.
+#         if gen_campsite_info and available_dates_by_site_id:
+#             for site_id, dates in available_dates_by_site_id.items():
+#                 out.append(
+#                     "  * Site {site_id} is available on the following dates:".format(
+#                         site_id=site_id
+#                     )
+#                 )
+#                 for date in dates:
+#                     out.append(
+#                         "    * {start} -> {end}".format(
+#                             start=date["start"], end=date["end"]
+#                         )
+#                     )
+
+#     if has_availabilities:
+#         out.insert(
+#             0,
+#             "there are campsites available from {start} to {end}!!!".format(
+#                 start=start_date.strftime(DateFormat.INPUT_DATE_FORMAT.value),
+#                 end=end_date.strftime(DateFormat.INPUT_DATE_FORMAT.value),
+#             ),
+#         )
+#     else:
+#         out.insert(0, "There are no campsites available :(")
+#     return "\n".join(out), has_availabilities
+
+
+# def generate_json_output(info_by_park_id):
+#     availabilities_by_park_id = {}
+#     has_availabilities = False
+#     for park_id, info in info_by_park_id.items():
+#         current, _, available_dates_by_site_id, _ = info
+#         if current:
+#             has_availabilities = True
+#             availabilities_by_park_id[park_id] = available_dates_by_site_id
+
+#     return json.dumps(availabilities_by_park_id), has_availabilities
+
+def generate_html_output(info_by_park_id, params):
+    html_prefix="<html><head></head><body>"
+    html_suffix="</body></html>"
+    html=""
+
+    startDateTxt=params['start_date'].strftime("%a %b %d, %Y") 
+    endDateTxt=params['end_date'].strftime("%a %b %d, %Y") 
+
+    html=f"Campsites for {startDateTxt} to {endDateTxt}"
+    html+="<br>"
     for park_id, info in info_by_park_id.items():
         current, maximum, available_dates_by_site_id, park_name = info
-        if current:
-            emoji = Emoji.SUCCESS.value
-            has_availabilities = True
-        else:
-            emoji = Emoji.FAILURE.value
 
-        out.append(
-            "{emoji} {park_name} ({park_id}): {current} site(s) available out of {maximum} site(s)".format(
-                emoji=emoji,
-                park_name=park_name,
-                park_id=park_id,
-                current=current,
-                maximum=maximum,
-            )
-        )
-
-        # Displays campsite ID and availability dates.
-        if gen_campsite_info and available_dates_by_site_id:
-            for site_id, dates in available_dates_by_site_id.items():
-                out.append(
-                    "  * Site {site_id} is available on the following dates:".format(
-                        site_id=site_id
-                    )
-                )
-                for date in dates:
-                    out.append(
-                        "    * {start} -> {end}".format(
-                            start=date["start"], end=date["end"]
-                        )
-                    )
-
-    if has_availabilities:
-        out.insert(
-            0,
-            "there are campsites available from {start} to {end}!!!".format(
-                start=start_date.strftime(DateFormat.INPUT_DATE_FORMAT.value),
-                end=end_date.strftime(DateFormat.INPUT_DATE_FORMAT.value),
-            ),
-        )
-    else:
-        out.insert(0, "There are no campsites available :(")
-    return "\n".join(out), has_availabilities
+        html+="<p>"
+        html+=f"{park_name} <a href='https://www.recreation.gov/camping/campgrounds/{park_id}' target=_blank>recreation.gov</a>"
+        html+=f"<br>{current} sites available out of {maximum}"
+        html+="<br>"
+        for site_id, dates in available_dates_by_site_id.items():
+            html+=f"<a href='https://www.recreation.gov/camping/campsites/{site_id}' target=_blank>{site_id}</a>"
+            html+="<br>"
+        html+="</p>"
 
 
-def generate_json_output(info_by_park_id):
-    availabilities_by_park_id = {}
-    has_availabilities = False
-    for park_id, info in info_by_park_id.items():
-        current, _, available_dates_by_site_id, _ = info
-        if current:
-            has_availabilities = True
-            availabilities_by_park_id[park_id] = available_dates_by_site_id
+    html=html_prefix+html+html_suffix
+    return html
+        
+        # print(park_id)
+        # print(park_name)
+        # print(current)
+        # print(maximum)
+        # print(available_dates_by_site_id)
+        # for site_id, dates in available_dates_by_site_id.items():
+        #     print(site_id)
+        # print('\n')
 
-    return json.dumps(availabilities_by_park_id), has_availabilities
 
 
-def main(parks, json_output=False):
+
+def main():   # parks, json_output=False
+    argList=sys.argv
+    paramsFile=os.path.join('cfg_'+argList[1]+'.json')
+    print(paramsFile)
+
+
+    if os.path.isfile(paramsFile):
+        paramsTxt=open(paramsFile).read()
+        params=json.loads(paramsTxt)
+        params['start_date']=datetime.strptime(params['start_date'], '%Y-%m-%d')
+        params['end_date']=datetime.strptime(params['end_date'], '%Y-%m-%d')
+    
+    print(f"params={params}")
+    print('\n')
+    
     info_by_park_id = {}
-    for park_id in parks:
-        info_by_park_id[park_id] = check_park(
-            park_id,
-            args.start_date,
-            args.end_date,
-            args.campsite_type,
-            args.campsite_ids,
-            nights=args.nights,
-        )
+    for park_i in params['parks']:
+        if park_i['check']:
+            info_by_park_id[park_i['id']] = check_park(
+                park_i['id'],
+                params['start_date'],
+                params['end_date'],
+                '',
+                '',
+            )
+    print('\n')
+    print(info_by_park_id)
+    # exit()
 
-    if json_output:
-        output, has_availabilities = generate_json_output(info_by_park_id)
-    else:
-        output, has_availabilities = generate_human_output(
-            info_by_park_id,
-            args.start_date,
-            args.end_date,
-            args.show_campsite_info,
-        )
-    print(output)
-    return has_availabilities
+    # output, has_availabilities = generate_json_output(info_by_park_id)
+
+    output_HTML=generate_html_output(info_by_park_id, params)
+    with open('output.html', 'w') as outfile:
+        outfile.write(output_HTML)
+
+    
+    # print('\n')
+    # print(output)
+
+    # if json_output:
+    #     output, has_availabilities = generate_json_output(info_by_park_id)
+    # else:
+    #     output, has_availabilities = generate_human_output(
+    #         info_by_park_id,
+    #         params['start_date'],
+    #         params['end_date'],
+    #         True
+    #     )
+    # print(output)
+    # return has_availabilities
 
 
 if __name__ == "__main__":
-    parser = CampingArgumentParser()
-    args = parser.parse_args()
+    # parser = CampingArgumentParser()
+    # args = parser.parse_args()
+    # print(args)
+    # print(type(args))
 
-    if args.debug:
-        LOG.setLevel(logging.DEBUG)
+    # if args.params:
+ 
+    # if args.debug:
+    #     LOG.setLevel(logging.DEBUG)
 
-    main(args.parks, json_output=args.json_output)
+    # LOG.setLevel(logging.DEBUG)
+
+    main()
