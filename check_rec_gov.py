@@ -8,6 +8,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 from itertools import count, groupby
+import copy
 
 from dateutil import rrule
 
@@ -65,12 +66,22 @@ def get_park_information(
     # Collapse the data into the described output format.
     # Filter by campsite_type if necessary.
     data = {}
+    data2 = {} # additional information on the campsite, excluding "availabilities"
 
     for month_data in api_data:
         for campsite_id, campsite_data in month_data["campsites"].items():
             LOG.debug("campsite_data="+json.dumps(campsite_data))
             available = []
             a = data.setdefault(campsite_id, [])
+
+            # get addition campsite data, excluding "availabilities" and "quantities"
+            campsite_info=copy.deepcopy(campsite_data)
+            # print(campsite_info)
+            campsite_info.pop('availabilities', None)
+            campsite_info.pop('quantities', None)
+            campsite_info.pop('campsite_id', None)
+            data2.setdefault(campsite_id, campsite_info)
+
             for date, availability_value in campsite_data["availabilities"].items():
                 if availability_value != "Available":
                     continue
@@ -90,8 +101,11 @@ def get_park_information(
                 available.append(date)
             if available:
                 a += available
-
-    return data
+    # print('\ndata=')
+    # print(data)
+    # print('\ndata2=')
+    # print(data2)
+    return data, data2
 
 
 def get_num_available_sites(
@@ -183,7 +197,7 @@ def consecutive_nights(available, nights):
 
 
 def check_park(park_id, start_date, end_date, campsite_type, campsite_ids=(), nights=None):
-    park_information = get_park_information(
+    park_information, park_additional_information = get_park_information(
         park_id, start_date, end_date, campsite_type, campsite_ids
     )
     LOG.debug(
@@ -195,7 +209,7 @@ def check_park(park_id, start_date, end_date, campsite_type, campsite_ids=(), ni
     current, maximum, availabilities_filtered = get_num_available_sites(
         park_information, start_date, end_date, nights=nights
     )
-    return current, maximum, availabilities_filtered, park_name
+    return current, maximum, availabilities_filtered, park_name, park_additional_information
 
 
 # def generate_human_output(
@@ -260,6 +274,25 @@ def check_park(park_id, start_date, end_date, campsite_type, campsite_ids=(), ni
 
 #     return json.dumps(availabilities_by_park_id), has_availabilities
 
+
+def getSiteInformation(info_by_site_id, site_id):
+    # print("\ninfo_by_site_id=")
+    # print(info_by_site_id)
+    site_info=info_by_site_id[str(site_id)]
+    return site_info
+
+def generate_site_info_html(site_info):
+    html=""
+    # site
+    # if "site" in site_info: html+=f" Site={site_info['site']}"
+    # else: html+=f" Site=na"
+    html+= " site=" + (site_info['site'] if ("site" in site_info) else "na")
+    html+= " " + (site_info['loop'] if ("loop" in site_info) else "na")
+    html+= ", max people=" + (str(site_info['max_num_people']) if ("max_num_people" in site_info) else "na")
+    html+= ", capacity=" + (site_info['capacity_rating'] if ("capacity_rating" in site_info) else "na")
+    html+= ", type=" + (site_info['campsite_type'] if ("campsite_type" in site_info) else "na")
+    return html
+
 def generate_html_output(info_by_park_id, params):
     html_prefix="<html><head></head><body>"
     html_suffix="</body></html>"
@@ -271,14 +304,22 @@ def generate_html_output(info_by_park_id, params):
     html=f"Campsites for {startDateTxt} to {endDateTxt}"
     html+="<br>"
     for park_id, info in info_by_park_id.items():
-        current, maximum, available_dates_by_site_id, park_name = info
+        # print("\ninfo=")
+        # print(info)
+        current, maximum, available_dates_by_site_id, park_name, info_by_site_id = info
 
         html+="<p>"
         html+=f"{park_name} <a href='https://www.recreation.gov/camping/campgrounds/{park_id}' target=_blank>recreation.gov</a>"
         html+=f"<br>{current} sites available out of {maximum}"
         html+="<br>"
         for site_id, dates in available_dates_by_site_id.items():
+            site_info=getSiteInformation(info_by_site_id, site_id)
+            # print("/nSiteInfo=")
+            # print(site_info)
+
             html+=f"<a href='https://www.recreation.gov/camping/campsites/{site_id}' target=_blank>{site_id}</a>"
+            html+=generate_site_info_html(site_info)
+            
             html+="<br>"
         html+="</p>"
 
@@ -301,7 +342,7 @@ def generate_html_output(info_by_park_id, params):
 def main():   # parks, json_output=False
     argList=sys.argv
     paramsFile=os.path.join('cfg_'+argList[1]+'.json')
-    print(paramsFile)
+    # print(paramsFile)
 
 
     if os.path.isfile(paramsFile):
@@ -323,8 +364,8 @@ def main():   # parks, json_output=False
                 '',
                 '',
             )
-    print('\n')
-    print(info_by_park_id)
+    # print('\ninfo_by_park_id')
+    # print(info_by_park_id)
     # exit()
 
     # output, has_availabilities = generate_json_output(info_by_park_id)

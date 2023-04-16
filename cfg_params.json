@@ -3,7 +3,8 @@
     ,"end_date": "2023-07-07"
     ,"parks":[
         {"id":232094, "check":true, "name":"Salmon La Sac"}
-        ,{"id":232064, "check":false, "name":"Kachess"}
-        ,{"id":232059, "check":false, "name":"Horseshoe Cove"}
+        ,{"id":232064, "check":true, "name":"Kachess"}
+        ,{"id":232059, "check":true, "name":"Horseshoe Cove"}
+        ,{"id":250985, "check":true, "name":"Yakima River Canyon Campgrouns"}
     ]
 }

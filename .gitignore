@@ -6,3 +6,5 @@ __pycache__
 /twitter_credentials.json
 *.swp
 *egg-info
+output.html
+
