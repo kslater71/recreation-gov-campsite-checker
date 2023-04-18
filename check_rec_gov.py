@@ -76,7 +76,6 @@ def get_park_information(
 
             # get addition campsite data, excluding "availabilities" and "quantities"
             campsite_info=copy.deepcopy(campsite_data)
-            # print(campsite_info)
             campsite_info.pop('availabilities', None)
             campsite_info.pop('quantities', None)
             campsite_info.pop('campsite_id', None)
@@ -293,7 +292,74 @@ def generate_site_info_html(site_info):
     html+= ", type=" + (site_info['campsite_type'] if ("campsite_type" in site_info) else "na")
     return html
 
-def generate_html_output(info_by_park_id, params):
+
+def getOutputData(info_by_park_id):
+    # transform tuple-based input data to JSON-based output data
+    outputData=[]
+    for park_id, info in info_by_park_id.items():
+        current, maximum, available_dates_by_site_id, park_name, info_by_site_id = info
+        campgroundData={
+            "park_id":park_id, 
+            "park_name":park_name, 
+            "total_sites_count":maximum, 
+            "available_sites_count":current,
+            "available_sites":[]
+            }
+        for site_id, dates in available_dates_by_site_id.items():
+            site_info=getSiteInformation(info_by_site_id, site_id)
+            siteData={"site_id":site_id}
+            siteData['site']=(site_info['site'] if ("site" in site_info) else "na")
+            siteData['loop']=(site_info['loop'] if ("loop" in site_info) else "na")
+            siteData['max_num_people']=(site_info['max_num_people'] if ("max_num_people" in site_info) else "na")
+            siteData['capacity_rating']=(site_info['capacity_rating'] if ("capacity_rating" in site_info) else "na")
+            siteData['campsite_type']=(site_info['campsite_type'] if ("campsite_type" in site_info) else "na")
+            campgroundData['available_sites'].append(siteData)
+        campgroundData['available_sites'] = sorted(campgroundData['available_sites'], key=lambda k: (k['loop'].lower(), k['site']))
+        outputData.append(campgroundData)
+        
+        # need to sort 'available_sites" based on loop and site
+    # need to sort outputData based on campground_name
+
+    return outputData
+
+
+
+# def generate_html_output_old(info_by_park_id, params):
+#     html_prefix="<html><head></head><body>"
+#     html_suffix="</body></html>"
+#     html=""
+
+#     startDateTxt=params['start_date'].strftime("%a %b %d, %Y") 
+#     endDateTxt=params['end_date'].strftime("%a %b %d, %Y") 
+
+#     html=f"Campsites for {startDateTxt} to {endDateTxt}"
+#     html+="<br>"
+#     for park_id, info in info_by_park_id.items():
+#         # print("\ninfo=")
+#         # print(info)
+#         current, maximum, available_dates_by_site_id, park_name, info_by_site_id = info
+
+#         html+="<p>"
+#         html+=f"{park_name} <a href='https://www.recreation.gov/camping/campgrounds/{park_id}' target=_blank>recreation.gov</a>"
+#         html+=f"<br>{current} sites available out of {maximum}"
+#         html+="<br>"
+#         for site_id, dates in available_dates_by_site_id.items():
+#             site_info=getSiteInformation(info_by_site_id, site_id)
+#             # print("/nSiteInfo=")
+#             # print(site_info)
+
+#             html+=f"<a href='https://www.recreation.gov/camping/campsites/{site_id}' target=_blank>{site_id}</a>"
+#             html+=generate_site_info_html(site_info)
+            
+#             html+="<br>"
+#         html+="</p>"
+
+
+#     html=html_prefix+html+html_suffix
+#     return html
+
+
+def generate_html_output(data, params):
     html_prefix="<html><head></head><body>"
     html_suffix="</body></html>"
     html=""
@@ -303,23 +369,18 @@ def generate_html_output(info_by_park_id, params):
 
     html=f"Campsites for {startDateTxt} to {endDateTxt}"
     html+="<br>"
-    for park_id, info in info_by_park_id.items():
-        # print("\ninfo=")
-        # print(info)
-        current, maximum, available_dates_by_site_id, park_name, info_by_site_id = info
-
+    for park in data:
         html+="<p>"
-        html+=f"{park_name} <a href='https://www.recreation.gov/camping/campgrounds/{park_id}' target=_blank>recreation.gov</a>"
-        html+=f"<br>{current} sites available out of {maximum}"
+        html+=f"{park['park_name']} <a href='https://www.recreation.gov/camping/campgrounds/{park['park_id']}' target=_blank>recreation.gov</a>"
+        html+=f"<br>{park['available_sites_count']} sites available out of {park['total_sites_count']}"
         html+="<br>"
-        for site_id, dates in available_dates_by_site_id.items():
-            site_info=getSiteInformation(info_by_site_id, site_id)
-            # print("/nSiteInfo=")
-            # print(site_info)
 
-            html+=f"<a href='https://www.recreation.gov/camping/campsites/{site_id}' target=_blank>{site_id}</a>"
-            html+=generate_site_info_html(site_info)
-            
+        for site in park['available_sites']:
+            html+=f"<a href='https://www.recreation.gov/camping/campsites/{site['site_id']}' target=_blank>{site['site_id']}</a>"
+            html+=f" site={site['loop']} {site['site']}"
+            html+=f", max people={site['max_num_people']}"
+            html+=f", capacity={site['capacity_rating']}"
+            html+=f", type={site['campsite_type']}"
             html+="<br>"
         html+="</p>"
 
@@ -327,14 +388,6 @@ def generate_html_output(info_by_park_id, params):
     html=html_prefix+html+html_suffix
     return html
         
-        # print(park_id)
-        # print(park_name)
-        # print(current)
-        # print(maximum)
-        # print(available_dates_by_site_id)
-        # for site_id, dates in available_dates_by_site_id.items():
-        #     print(site_id)
-        # print('\n')
 
 
 
@@ -364,16 +417,19 @@ def main():   # parks, json_output=False
                 '',
                 '',
             )
-    # print('\ninfo_by_park_id')
-    # print(info_by_park_id)
-    # exit()
+ 
+    # restruct data to a JSON
+    outputData=getOutputData(info_by_park_id)
+    # print(outputData)
 
-    # output, has_availabilities = generate_json_output(info_by_park_id)
 
-    output_HTML=generate_html_output(info_by_park_id, params)
+    # output_HTML=generate_html_output_old(info_by_park_id, params)
+    # with open('output_old.html', 'w') as outfile:
+    #     outfile.write(output_HTML)
+
+    output_HTML=generate_html_output(outputData, params)
     with open('output.html', 'w') as outfile:
         outfile.write(output_HTML)
-
     
     # print('\n')
     # print(output)
